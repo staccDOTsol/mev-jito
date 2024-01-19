@@ -1,0 +1,100 @@
+yarn run v1.22.21
+$ $npm_execpath run build
+$ npm run lint
+
+> mev-bot@1.0.0 lint
+> eslint . --ext .ts --ext .mts
+
+
+/Users/jd/mev-bot/src/build-bundle.ts
+  3182:20  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/jd/mev-bot/src/markets/index.ts
+  65:32  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/jd/mev-bot/src/markets/utils.ts
+  59:7  warning  'feeMint' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+✖ 3 problems (0 errors, 3 warnings)
+
+$ tsc -p tsconfig.json
+$ node --max-old-space-size=16384 --max-semi-space-size=256 --trace-warnings build/src/bot.js
+Fetched 100 accounts / total29610
+Fetched 200 accounts / total29610
+Fetched 300 accounts / total29610
+Fetched 400 accounts / total29610
+Fetched 500 accounts / total29610
+Fetched 600 accounts / total29610
+Fetched 700 accounts / total29610
+Fetched 800 accounts / total29610
+Fetched 900 accounts / total29610
+Fetched 1000 accounts / total29610
+Fetched 1100 accounts / total29610
+Fetched 1200 accounts / total29610
+Fetched 1300 accounts / total29610
+Fetched 1400 accounts / total29610
+Fetched 1500 accounts / total29610
+Fetched 1600 accounts / total29610
+Fetched 1700 accounts / total29610
+Fetched 1800 accounts / total29610
+Fetched 1900 accounts / total29610
+Fetched 2000 accounts / total29610
+Fetched 2100 accounts / total29610
+Fetched 2200 accounts / total29610
+Fetched 2300 accounts / total29610
+Fetched 2400 accounts / total29610
+Fetched 2500 accounts / total29610
+Fetched 2600 accounts / total29610
+Fetched 2700 accounts / total29610
+Fetched 2800 accounts / total29610
+Fetched 2900 accounts / total29610
+Fetched 3000 accounts / total29610
+Fetched 3100 accounts / total29610
+Fetched 3200 accounts / total29610
+Fetched 3300 accounts / total29610
+Fetched 3400 accounts / total29610
+Fetched 3500 accounts / total29610
+Fetched 3600 accounts / total29610
+Fetched 3700 accounts / total29610
+Fetched 3800 accounts / total29610
+Fetched 3900 accounts / total29610
+Fetched 4000 accounts / total29610
+Fetched 4100 accounts / total29610
+Fetched 4200 accounts / total29610
+Fetched 4300 accounts / total29610
+Fetched 4400 accounts / total29610
+Fetched 4500 accounts / total29610
+Fetched 4600 accounts / total29610
+Fetched 4700 accounts / total29610
+Fetched 4800 accounts / total29610
+Fetched 4900 accounts / total29610
+Fetched 5000 accounts / total29610
+Fetched 5100 accounts / total29610
+Fetched 5200 accounts / total29610
+Fetched 5300 accounts / total29610
+Fetched 5400 accounts / total29610
+Fetched 5500 accounts / total29610
+Fetched 5600 accounts / total29610
+Fetched 5700 accounts / total29610
+Fetched 5800 accounts / total29610
+Fetched 5900 accounts / total29610
+Fetched 6000 accounts / total29610
+Fetched 6100 accounts / total29610
+Fetched 6200 accounts / total29610
+Fetched 6300 accounts / total29610
+Fetched 6400 accounts / total29610
+Fetched 6500 accounts / total29610
+Fetched 6600 accounts / total29610
+Fetched 6700 accounts / total29610
+Fetched 6800 accounts / total29610
+Fetched 6900 accounts / total29610
+Fetched 7000 accounts / total29610
+Fetched 7100 accounts / total29610
+Fetched 7200 accounts / total29610
+Fetched 7300 accounts / total29610
+Fetched 7400 accounts / total29610
+Fetched 7500 accounts / total29610
+Fetched 7600 accounts / total29610
+Fetched 7700 accounts / total29610
+Fetched 7800 accounts / total29610
+Fetched 7900 accounts / total29610
