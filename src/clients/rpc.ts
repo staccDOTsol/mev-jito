@@ -78,7 +78,7 @@ const coalesceFetch = () => {
 
   const coalesceRequests = async () => {
     if (requestQueue.size() === 0) return;
-    logger.debug(`${requestQueue.size()} requests awaiting coalescing`);
+    logger.trace(`${requestQueue.size()} requests awaiting coalescing`);
 
     const newBodies = [];
     const resolves = [];
@@ -100,7 +100,7 @@ const coalesceFetch = () => {
       i++;
     }
 
-    logger.debug(`Coalescing ${newBodies.length} requests`);
+    logger.trace(`Coalescing ${newBodies.length} requests`);
 
     const response = await fetch(lastUrl, {
       body: JSON.stringify(newBodies),
@@ -122,7 +122,7 @@ const coalesceFetch = () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const json: any = await response.json();
 
-    logger.debug(`Resolving ${json.length} Responses`);
+    logger.trace(`Resolving ${json.length} Responses`);
 
     for (const item of json) {
       const singleResponse = new Response(JSON.stringify(item), {
@@ -133,7 +133,7 @@ const coalesceFetch = () => {
       resolves[parseInt(item.id)](singleResponse);
     }
 
-    logger.debug(
+    logger.trace(
       `Coalesced ${json.length} requests in ${new Date().getTime() - startCoalescing}ms`,
     );
   };

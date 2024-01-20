@@ -18,9 +18,9 @@ import { logger } from './logger.js';
  * for a set of addresses used by the arb txn so that the arb txn size is reduced below the maximum.
  */
 class LookupTableProvider {
-  lookupTables: Map<string, AddressLookupTableAccount>;
-  addressesForLookupTable: Map<string, Set<string>>;
-  lookupTablesForAddress: Map<string, Set<string>>;
+  public lookupTables: Map<string, AddressLookupTableAccount>;
+  public addressesForLookupTable: Map<string, Set<string>>;
+  public lookupTablesForAddress: Map<string, Set<string>>;
   geyserClient: GeyserProgramUpdateClient;
 
   constructor() {
@@ -33,10 +33,31 @@ class LookupTableProvider {
     );
   }
 
-  private updateCache(
+  private  async updateCache(
     lutAddress: PublicKey,
     lutAccount: AddressLookupTableAccount,
   ) {
+    if (!lutAccount.isActive) {
+      try {
+      this.lookupTables.delete(lutAddress.toBase58());
+      this.addressesForLookupTable.delete(lutAddress.toBase58());
+      }
+      catch (e) {
+        logger.error(e)
+      }
+      return;
+    }
+    
+    if (lutAccount.state.deactivationSlot < await connection.getSlot()) {
+      try {
+      this.lookupTables.delete(lutAddress.toBase58());
+      this.addressesForLookupTable.delete(lutAddress.toBase58());
+      }
+      catch (e) {
+        logger.error(e)
+      }
+      return;
+    }
     this.lookupTables.set(lutAddress.toBase58(), lutAccount);
 
     this.addressesForLookupTable.set(lutAddress.toBase58(), new Set());

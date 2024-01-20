@@ -1,4 +1,4 @@
-import { Arb } from './build-bundle.js';
+import { Arb, getMarginfiClient } from './build-bundle.js';
 import { searcherClient } from './clients/jito.js';
 import { logger } from './logger.js';
 import { Bundle as JitoBundle } from 'jito-ts/dist/sdk/block-engine/types.js';
@@ -6,7 +6,11 @@ import bs58 from 'bs58';
 import { connection } from './clients/rpc.js';
 import * as fs from 'fs';
 import { stringify } from 'csv-stringify';
-
+import { PublicKey } from '@solana/web3.js';
+import { MarginfiAccountWrapper } from "mrgn-ts";
+import * as anchor from "@coral-xyz/anchor";
+import { config } from './config.js';
+import { Keypair } from '@solana/web3.js';
 const CHECK_LANDED_DELAY_MS = 30000;
 
 type Trade = {
@@ -27,7 +31,6 @@ type TradeCSV = {
   errorContent: string | null;
   txn0Signature: string;
   txn1Signature: string;
-  txn2Signature: string;
   arbSize: string;
   expectedProfit: string;
   hop1Dex: string;
@@ -59,21 +62,46 @@ async function processCompletedTrade(uuid: string) {
 
   const txn0Signature = bs58.encode(trade.bundle[0].signatures[0]);
   const txn1Signature = bs58.encode(trade.bundle[1].signatures[0]);
-  const txn2Signature = bs58.encode(trade.bundle[2].signatures[0]);
 
-  const txn2 = await connection
-    .getTransaction(txn2Signature, {
+  const txn1 = await connection
+    .getTransaction(txn1Signature, {
       commitment: 'confirmed',
       maxSupportedTransactionVersion: 10,
     })
+    .then(async (_txn) => {
+        try {
+
+          const payer = Keypair.fromSecretKey(
+            Uint8Array.from(
+              JSON.parse(fs.readFileSync(config.get('payer_keypair_path'), 'utf-8')),
+            )
+          );
+          const wallet = new anchor.Wallet(payer);
+          const provider = new anchor.AnchorProvider(connection, wallet, {});
+
+          const client = await getMarginfiClient({readonly: true, authority: new PublicKey("7ihN8QaTfNoDTRTQGULCzbUT3PHwPDTu5Brcu4iT2paP"), provider, wallet});
+
+          console.log(`Using ${client.config.environment} environment; wallet: ${client.wallet.publicKey.toBase58()}`);
+          const hop0SourceMint = trade.sourceMint.toString();
+          const marginfiAccount = await MarginfiAccountWrapper.fetch("EW1iozTBrCgyd282g2eemSZ8v5xs7g529WFv4g69uuj2", client);
+          const mint = new PublicKey(hop0SourceMint);
+          const solBank = client.getBankByMint(mint);
+          if (solBank) {
+            marginfiAccount.withdraw(1 / solBank.mintDecimals ** 10, solBank.address, true);
+          }
+        }
+        catch (e){
+            console.log(e);
+        }
+    })
     .catch(() => {
       logger.info(
-        `getTransaction failed. Assuming txn2 ${txn2Signature} did not land`,
+        `getTransaction failed. Assuming txn2 ${txn1Signature} did not land`,
       );
       return null;
     });
 
-  if (txn2 !== null) {
+  if (txn1 !== null) {
     trade.landed = true;
   }
 
@@ -87,7 +115,6 @@ async function processCompletedTrade(uuid: string) {
     errorContent: trade.errorContent,
     txn0Signature,
     txn1Signature,
-    txn2Signature,
     arbSize: trade.arbSize.toString(),
     expectedProfit: trade.expectedProfit.toString(),
     hop1Dex: trade.hop1Dex,
@@ -237,7 +264,6 @@ async function sendBundle(bundleIterator: AsyncGenerator<Arb>): Promise<void> {
         }
         const txn0Signature = bs58.encode(bundle[0].signatures[0]);
         const txn1Signature = bs58.encode(bundle[1].signatures[0]);
-        const txn2Signature = bs58.encode(bundle[2].signatures[0]);
         const tradeCsv: TradeCSV = {
           timestamp: new Date().getTime(),
           uuid: '',
@@ -248,7 +274,6 @@ async function sendBundle(bundleIterator: AsyncGenerator<Arb>): Promise<void> {
           errorContent: JSON.stringify(error),
           txn0Signature,
           txn1Signature,
-          txn2Signature,
           arbSize: arbSize.toString(),
           expectedProfit: expectedProfit.toString(),
           hop1Dex: hop1Dex,

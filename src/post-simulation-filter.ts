@@ -11,8 +11,9 @@ import { Timings } from './types.js';
 import { dropBeyondHighWaterMark } from './utils.js';
 import { logger } from './logger.js';
 import bs58 from 'bs58';
+import { config } from './config.js';
 
-const HIGH_WATER_MARK = 250;
+const HIGH_WATER_MARK = 250 * config.get('num_worker_threads')
 
 enum TradeDirection {
   SOLD_BASE = 'SOLD_BASE',

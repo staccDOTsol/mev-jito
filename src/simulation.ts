@@ -6,9 +6,10 @@ import { SimulatedBundleResponse } from 'jito-ts';
 import { FilteredTransaction } from './pre-simulation-filter.js';
 import { Timings } from './types.js';
 import { Queue } from '@datastructures-js/queue';
+import { config } from './config.js';
 
-const MAX_SIMULATION_AGE_MS = 222;
-const MAX_PENDING_SIMULATIONS = 400;
+const MAX_SIMULATION_AGE_MS = 1666;
+const MAX_PENDING_SIMULATIONS = 200 * config.get('num_worker_threads');
 const RECEIVED_SIMULATION_RESULT_EVENT = 'receivedSimulationResult';
 
 type SimulationResult = {

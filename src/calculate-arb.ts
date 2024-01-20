@@ -18,19 +18,20 @@ import bs58 from 'bs58';
 import fetch from 'node-fetch';
 import { NATIVE_MINT } from '@solana/spl-token-3';
 import { SwapMode } from '@jup-ag/core';
+import { connection } from './clients/rpc.js';
 const mrgnMetadata: any = await fetch("https://storage.googleapis.com/mrgn-public/mrgn-token-metadata-cache.json").then((res) => res.json());  
 
 const JSBI = defaultImport(jsbi);
 
 const ARB_CALCULATION_NUM_STEPS = config.get('arb_calculation_num_steps');
-const MAX_ARB_CALCULATION_TIME_MS = config.get('max_arb_calculation_time_ms');
-const HIGH_WATER_MARK = 2000;
+const MAX_ARB_CALCULATION_TIME_MS = config.get('max_arb_calculation_time_ms') * config.get('num_worker_threads');
+const HIGH_WATER_MARK = 200 * config.get('num_worker_threads')
 
 // rough ratio usdc (in decimals) to sol (in lamports) used in priority queue
 // assuming 1 sol = 20 usdc and 1 sol has 3 more decimals than usdc
 // this means one unit of usdc equals x units of sol
 const USDC_SOL_RATOs: any = {}
-const MAX_TRADE_AGE_MS = 238;
+const MAX_TRADE_AGE_MS = 3238;
 
 type Route = {
   market: Market;
@@ -46,6 +47,7 @@ type Quote = { in: jsbi.default; out: jsbi.default };
 type ArbIdea = {
   txn: VersionedTransaction;
   arbSize: jsbi.default;
+  arbSizeDecimals: string;
   expectedProfit: jsbi.default;
   route: Route;
   timings: Timings;
@@ -68,10 +70,13 @@ async function calculateRoute(
 
     const tradeOutputOverride = hop.tradeOutputOverride
       ? {
-          in: hop.tradeOutputOverride.in.toString(),
+          in: arbSizeString,
           estimatedOut: hop.tradeOutputOverride.estimatedOut.toString(),
         }
-      : null;
+      : {
+        in: arbSizeString,
+        estimatedOut: "0"
+      };
     serializableRoute.push({
       sourceMint,
       destinationMint,
@@ -106,17 +111,21 @@ for (const item of mrgnMetadata){
       logger.error(`Could not find market for ${NATIVE_MINT.toBase58()} and ${item.address}`);
       continue;
     }
-    USDC_SOL_RATOs[item.address] = BigInt(Math.floor(1_000_000_000 * 1 / (JSBI.toNumber((await calculateQuote(usdcToSolMkt.id, {
+    const big = JSBI.BigInt(1_000_000_000);
+    const one = JSBI.BigInt(1);
+    const divided = JSBI.multiply(big, JSBI.divide(one, JSBI.multiply(one, (((await calculateQuote(usdcToSolMkt.id, {
 
-            sourceMint: NATIVE_MINT,
-            destinationMint: new PublicKey(item.address),
-            amount: JSBI.BigInt(LAMPORTS_PER_SOL),
-            swapMode: SwapMode.ExactIn,
-          },
-          undefined,
-          true,
-        )
-      ).outAmount))))
+      sourceMint: NATIVE_MINT,
+      destinationMint: new PublicKey(item.address),
+      amount: JSBI.BigInt(LAMPORTS_PER_SOL),
+      swapMode: SwapMode.ExactIn,
+    },
+    undefined,
+    true,
+  )
+).outAmount)))));
+
+    USDC_SOL_RATOs[item.address] = JSBI.toNumber(divided);
     }
   }
   // prioritize trades that are bigger as profit is esssentially bottlenecked by the trade size
@@ -136,15 +145,25 @@ for (const item of mrgnMetadata){
       const tradeASize = tradeA.baseIsTokenA
         ? tradeA.tradeSizeA
         : tradeA.tradeSizeB;
-      const tradeASizeNormalized = tradeAIsUsdc
-        ? tradeASize * USDC_SOL_RATOs[tradeABaseMint]
+        let tradeASizeNormalized = tradeAIsUsdc
+        ? tradeASize
         : tradeASize;
+      if (Object.keys(USDC_SOL_RATOs).includes(tradeABaseMint)){
+       tradeASizeNormalized = tradeAIsUsdc
+        ? tradeASize * BigInt(USDC_SOL_RATOs[tradeABaseMint])
+        : tradeASize;
+      }
       const tradeBSize = tradeB.baseIsTokenA
         ? tradeB.tradeSizeA
         : tradeB.tradeSizeB;
-      const tradeBSizeNormalized = tradeBisUsdc
-        ? tradeBSize * USDC_SOL_RATOs[tradeBBaseMint]
+      let tradeBSizeNormalized = tradeBisUsdc
+        ? tradeBSize
         : tradeBSize;
+        if (Object.keys(USDC_SOL_RATOs).includes(tradeBBaseMint)){
+        tradeBSizeNormalized = tradeBisUsdc
+        ? tradeBSize * BigInt(USDC_SOL_RATOs[tradeBBaseMint])
+        : tradeBSize;
+      }
 
       if (tradeASizeNormalized < tradeBSizeNormalized) {
         return 1;
@@ -404,9 +423,11 @@ for (const item of mrgnMetadata){
     });
     const profit = getProfitForQuote(quote);
     const arbSize = quote.in;
-  
-    const decimals = mrgnMetadata.filter((m) => m.address === backrunSourceMint)[0].decimals;
-    const backrunSourceMintName = mrgnMetadata.filter((m) => m.address === backrunSourceMint)[0].symbol;
+    const backrunSourceMintMint = await connection.getParsedAccountInfo(new PublicKey(backrunSourceMint));
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore
+    const decimals = backrunSourceMintMint.value.data.parsed.info.decimals;
+    const backrunSourceMintName = backrunSourceMint
 
     const profitDecimals = toDecimalString(profit.toString(), decimals);
     const arbSizeDecimals = toDecimalString(arbSize.toString(), decimals);
@@ -422,6 +443,7 @@ for (const item of mrgnMetadata){
     yield {
       txn,
       arbSize,
+      arbSizeDecimals,
       expectedProfit: profit,
       route,
       timings: {

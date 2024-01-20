@@ -1,5 +1,6 @@
 import {
   AccountMeta,
+  AddressLookupTableAccount,
   Keypair,
   SystemProgram,
   TransactionInstruction,
@@ -2786,9 +2787,7 @@ import * as anchor from '@coral-xyz/anchor';
 import { logger } from './logger.js';
 import { Timings } from './types.js';
 import {
-  calculateQuote,
   calculateSwapLegAndAccounts,
-  getMarketsForPair,
 } from './markets/index.js';
 import { lookupTableProvider } from './lookup-table-provider.js';
 
@@ -2796,7 +2795,6 @@ import { SwapLegAndAccounts } from '@jup-ag/core/dist/lib/amm.js';
 
 import { MarginfiClient, getConfig } from "mrgn-ts";
 import { PublicKey } from "@solana/web3.js";
-import {BigNumber} from 'bignumber.js';
 import { NATIVE_MINT } from '@mrgnlabs/mrgn-common';
 
 
@@ -2849,13 +2847,9 @@ const TIP_ACCOUNTS = [
 const getRandomTipAccount = () =>
   TIP_ACCOUNTS[Math.floor(Math.random() * TIP_ACCOUNTS.length)];
 
-const MIN_TIP_LAMPORTS = config.get('min_tip_lamports');
 const TIP_PERCENT = config.get('tip_percent');
 
 // three signatrues (up to two for set up txn, one for main tx)
-const TXN_FEES_LAMPORTS = 15000;
-
-const minProfit = MIN_TIP_LAMPORTS + TXN_FEES_LAMPORTS;
 
 const MIN_BALANCE_RENT_EXEMPT_TOKEN_ACC =
   await Token.getMinimumBalanceForRentExemptAccount(connection);
@@ -2902,6 +2896,7 @@ async function* buildBundle(
   for await (const {
     txn,
     arbSize,
+    arbSizeDecimals,
     expectedProfit,
     route,
     timings,
@@ -2914,38 +2909,6 @@ async function* buildBundle(
     const isUSDC = !hop0SourceMint.equals(NATIVE_MINT);
     const expectedProfitMinusFee = expectedProfit; //JSBI.subtract(expectedProfit, flashloanFee);
 
-    // market to calculate usdc profit in sol
-    const usdcToSolMkt = getMarketsForPair(
-        NATIVE_MINT.toBase58(),
-        hop0SourceMint.toBase58(),
-    )[0];
-    let expectedProfitLamports: jsbi.default;
-
-    if (isUSDC) {
-      expectedProfitLamports = (
-        await calculateQuote(
-          usdcToSolMkt.id,
-          {
-            sourceMint: hop0SourceMint,
-            destinationMint: NATIVE_MINT,
-            amount: expectedProfitMinusFee,
-            swapMode: SwapMode.ExactIn,
-          },
-          undefined,
-          true,
-        )
-      ).outAmount;
-    } else {
-      expectedProfitLamports = expectedProfitMinusFee;
-    }
-
-    if (JSBI.lessThan(expectedProfitLamports, JSBI.BigInt(minProfit))) {
-      logger.info(
-        `Skipping due to profit (${expectedProfitLamports}) being less than min (${minProfit})`,
-      );
-      continue;
-    }
-
     const tip = JSBI.divide(
       JSBI.multiply(expectedProfitMinusFee, JSBI.BigInt(TIP_PERCENT)),
       JSBI.BigInt(100),
@@ -2956,10 +2919,7 @@ async function* buildBundle(
       JSBI.BigInt(100),
     );
 
-    const tipLamports = JSBI.divide(
-      JSBI.multiply(expectedProfitLamports, JSBI.BigInt(TIP_PERCENT)),
-      JSBI.BigInt(100),
-    );
+    const tipLamports = JSBI.BigInt(1_000_000);
 
     // arb size + tip + flashloan fee + profit buffer
     const minOut = JSBI.add(
@@ -2972,12 +2932,14 @@ async function* buildBundle(
 
     let sourceTokenAccount: PublicKey;
 
-    const USDC_ATA = await Token.getOrCreateAssociatedTokenAccount(
-        connection,
-        payer,
-        hop0SourceMint,
-        payer.publicKey,
-      );
+    let USDC_ATA 
+    try {
+        USDC_ATA = await Token.getOrCreateAssociatedTokenAccount(connection, payer, hop0SourceMint, payer.publicKey);
+    }
+    catch (e) {
+        console.log(e);
+        continue;
+    }
 
     if (!isUSDC) {
       const sourceTokenAccountKeypair = Keypair.generate();
@@ -3045,10 +3007,13 @@ async function* buildBundle(
     const marginfiAccount = await MarginfiAccountWrapper.fetch("EW1iozTBrCgyd282g2eemSZ8v5xs7g529WFv4g69uuj2", client);
     const mint = new PublicKey(hop0SourceMint);
     const solBank = client.getBankByMint(mint);
-    if (!solBank) throw Error("SOL bank not found");
+    if (!solBank) {
+         logger.info("SOL bank not found");
+        continue
+    }
 
     
-    const depositIx = await marginfiAccount.makeDepositIx(BigNumber("1"), solBank.address);
+    const depositIx = await marginfiAccount.makeDepositIx((1 / solBank.mintDecimals ** 10), solBank.address);
     setUpIxns.push(...depositIx.instructions);
 
     const legs = {
@@ -3082,7 +3047,7 @@ async function* buildBundle(
           userSourceTokenAccount,
           userDestinationTokenAccount,
           userTransferAuthority: payer.publicKey,
-          amount: i === 0 ? arbSize : JSBI.BigInt(1),
+          amount: i === 0 ? arbSize : hop.tradeOutputOverride.in,
           swapMode: SwapMode.ExactIn,
         },
         undefined,
@@ -3103,14 +3068,14 @@ async function* buildBundle(
 
     // eslint-disable-next-line @typescript-eslint/ban-ts-comment
     // @ts-ignore
-    const borrowIx = await marginfiAccount.makeBorrowIx(BigNumber(arbSize.toString()), solBank.address);
+    const borrowIx = await marginfiAccount.makeBorrowIx((arbSizeDecimals), solBank.address);
     instructionsMain.push(...borrowIx.instructions);
     const jupiterIxn = jupiterProgram.instruction.route(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         legs as any,
         new BN(arbSize.toString()),
         new BN(minOut.toString()),
-        666,
+        2380,
         0,
         {
           accounts: {
@@ -3126,8 +3091,11 @@ async function* buildBundle(
 
     
     instructionsMain.push(jupiterIxn);
-
-    const depositIx = await marginfiAccount.makeDepositIx(BigNumber(arbSize.toString()), solBank.address);
+    if (arbSizeDecimals.length > 52){
+        logger.info("arbSizeDecimals too big")
+        continue;
+    }
+    const depositIx = await marginfiAccount.makeDepositIx(JSBI.toNumber(JSBI.add(JSBI.BigInt(arbSize),JSBI.divide(expectedProfit, JSBI.BigInt(3)))) / solBank.mintDecimals ** 10, solBank.address);
     instructionsMain.push(...depositIx.instructions);
 
     const endIndex = instructionsMain.length + 1;
@@ -3140,6 +3108,8 @@ async function* buildBundle(
       ...instructionsMain,
       ...endFlashLoanIx.instructions,
     ]
+    console.log(beginFlashLoanIx.instructions.length, instructionsMain.length, endFlashLoanIx.instructions.length, ixs.length)
+
     if (!isUSDC) {
       const closeSolTokenAcc = Token.createCloseAccountInstruction(
         sourceTokenAccount,
@@ -3151,7 +3121,7 @@ async function* buildBundle(
     const tipIxn = SystemProgram.transfer({
       fromPubkey: payer.publicKey,
       toPubkey: getRandomTipAccount(),
-      lamports: BigInt(tipLamports.toString()),
+      lamports: 1_000_000
     });
     ixs.push(tipIxn);
 
@@ -3169,15 +3139,75 @@ async function* buildBundle(
         addressesMain.push(key.pubkey);
       });
     });
-    const lookupTablesMain = await
-      lookupTableProvider.computeIdealLookupTablesForAddresses(addressesMain);
+    const MIN_ADDRESSES_TO_INCLUDE_TABLE = 2;
+    const MAX_TABLE_COUNT = 11;
+
+    const startCalc = new Date().getTime();
+
+    const addressSet = new Set<string>();
+    const tableIntersections = new Map<string, number>();
+    const selectedTables: AddressLookupTableAccount[] = [];
+    const remainingAddresses = new Set<string>();
+    let numAddressesTakenCareOf = 0;
+
+    for (const address of addressesMain) {
+      const addressStr = address.toBase58();
+
+      if (addressSet.has(addressStr)) continue;
+      addressSet.add(addressStr);
+
+      const tablesForAddress =
+      lookupTableProvider.lookupTablesForAddress.get(addressStr) || new Set();
+
+      if (tablesForAddress.size === 0) continue;
+
+      remainingAddresses.add(addressStr);
+
+      for (const table of tablesForAddress) {
+        const intersectionCount = tableIntersections.get(table) || 0;
+        tableIntersections.set(table, intersectionCount + 1);
+      }
+    }
+
+    const sortedIntersectionArray = Array.from(
+      tableIntersections.entries(),
+    ).sort((a, b) => b[1] - a[1]);
+
+    for (const [lutKey, _] of sortedIntersectionArray) {
+      if (selectedTables.length >= MAX_TABLE_COUNT) break;
+
+      const lutAddresses = lookupTableProvider.addressesForLookupTable.get(lutKey);
+
+      const addressMatches = new Set(
+        [...remainingAddresses].filter((x) => lutAddresses.has(x)),
+      );
+
+      if (addressMatches.size >= MIN_ADDRESSES_TO_INCLUDE_TABLE) {
+        selectedTables.push(lookupTableProvider.lookupTables.get(lutKey));
+        for (const address of addressMatches) {
+          remainingAddresses.delete(address);
+          numAddressesTakenCareOf++;
+        }
+      }
+    }
+
+    logger.info(
+      `Reduced ${addressSet.size} different addresses to ${
+        selectedTables.length
+      } lookup tables from ${sortedIntersectionArray.length} (${
+        lookupTableProvider.lookupTables.size
+      }) candidates, with ${
+        addressSet.size - numAddressesTakenCareOf
+      } missing addresses in ${new Date().getTime() - startCalc}ms.`,
+    );
+
      
       
     const messageMain = new TransactionMessage({
       payerKey: payer.publicKey,
       recentBlockhash: txn.message.recentBlockhash,
       instructions: ixs,
-    }).compileToV0Message(lookupTablesMain);
+    }).compileToV0Message(selectedTables);
     const txMain = new VersionedTransaction(messageMain);
     try {
       const serializedMsg = txMain.serialize();
@@ -3186,24 +3216,13 @@ async function* buildBundle(
         logger.error('tx too big');
         continue;
       }
-      txMain.sign([payer]);
     } catch (e) {
       logger.error(e, 'error signing txMain');
       continue;
    
     }
-    const mrgnFiBankBalance = marginfiAccount.getBalance(solBank.address);
-
-    const withdrawIx = await marginfiAccount.makeDepositIx(mrgnFiBankBalance.assetShares, solBank.address);
-    const cleanUpIxns = withdrawIx.instructions
-
-    const messageCleanup = new TransactionMessage({
-        payerKey: payer.publicKey,
-        recentBlockhash: txn.message.recentBlockhash,
-        instructions: cleanUpIxns,
-      }).compileToV0Message([]);
-      const txCleanUp = new VersionedTransaction(messageCleanup);
-    const bundle = [txn, txSetUp, txMain, txCleanUp];
+    txMain.sign([payer]);
+    const bundle = [txSetUp, txMain];
 
     yield {
       bundle,

@@ -197,6 +197,8 @@ async function calulateQuote(id: string, params: QuoteParams) {
       sourceMint: params.sourceMint.toBase58(),
       destinationMint: params.destinationMint.toBase58(),
       swapMode: params.swapMode == SwapMode.ExactIn ? 'ExactIn' : 'ExactOut',
+      maxAccounts: "21",
+      asLegacyTransaction: "false",
       slippageBps: "6666"
     };
 
@@ -290,7 +292,9 @@ async function calculateHop(amm: Amm, quoteParams: QuoteParams): Promise<Quote> 
       sourceMint: quoteParams.sourceMint.toBase58(),
       destinationMint: quoteParams.destinationMint.toBase58(),
       swapMode: quoteParams.swapMode == SwapMode.ExactIn ? 'ExactIn' : 'ExactOut',
-      slippageBps: "6666"
+      slippageBps: "6666",
+      maxAccounts: "21",
+      asLegacyTransaction: "false"
     };
 
     // Check if the base URL in config is valid and ends with a slash or not

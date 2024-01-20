@@ -60,7 +60,6 @@ const dexs: DEX[] = [
   //new RaydiumClmmDEX(),
 ];
 
-let accountsForGeyserUpdatePromises: Promise<string[]>[] = [];
 const accountsForGeyserUpdate: any = [];
 for (const dex of dexs) {
   for (const addPoolMessage of dex.getAmmCalcAddPoolMessages()) {
@@ -68,21 +67,19 @@ for (const dex of dexs) {
       AmmCalcWorkerParamMessage,
       AmmCalcWorkerResultMessage
     >(addPoolMessage);
-    const result = Promise.race(results).then((result) => {
+    
+    const resultsPromises = results.map(resultPromise => resultPromise.then((result) => {
       if (result.type !== 'addPool') {
         throw new Error('Unexpected result type in addPool response');
       }
       const payload = result.payload as AddPoolResultPayload;
       return payload.accountsForUpdate;
-    });
-    accountsForGeyserUpdatePromises.push(result);
-
-      accountsForGeyserUpdate.push(await Promise.all(
-        accountsForGeyserUpdatePromises,
-      ))
-      accountsForGeyserUpdatePromises = [];
-      console.log (accountsForGeyserUpdate.length)
-  }
+    }));
+    
+    const resolvedResults = await Promise.all(resultsPromises);
+    accountsForGeyserUpdate.push(...resolvedResults);
+    console.log(accountsForGeyserUpdate.length);
+}
 }
 
 const accountsForGeyserUpdateFlat = accountsForGeyserUpdate.flat();
@@ -107,7 +104,6 @@ for (let i = 0; i < addressesToFetch.length; i += 100) {
 
 
 let seedAccountInfoPromises: Promise<AmmCalcWorkerResultMessage>[] = [];
-
 // seed account info in workers
 for (const [id, accountInfo] of initialAccountBuffers) {
   const message: AmmCalcWorkerParamMessage = {
@@ -122,7 +118,9 @@ for (const [id, accountInfo] of initialAccountBuffers) {
     AmmCalcWorkerResultMessage
   >(message);
  
-  seedAccountInfoPromises.push(Promise.race(results));
+  const resultsPromises = results.map(resultPromise => resultPromise);
+  seedAccountInfoPromises.push(...resultsPromises);
+  
   if (seedAccountInfoPromises.length > 10) {
     await Promise.all(seedAccountInfoPromises);
     seedAccountInfoPromises = [];
@@ -192,6 +190,8 @@ for (const dex of dexs) {
 
       marketGraph.addMarket(market.tokenMintA, market.tokenMintB, market);
   }
+  console.log("tokenAccountsOfInterest")
+  console.log(tokenAccountsOfInterest.size);
 }
 export const accountsOfInterest = (): string[] => {
   return [...tokenAccountsOfInterest.keys()].filter(
