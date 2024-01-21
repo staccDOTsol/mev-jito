@@ -249,10 +249,19 @@ class MarginfiAccountWrapper {
   // User actions
   // --------------------------------------------------------------------------
 
-  async makeDepositIx(amount: Amount, bankAddress: PublicKey): Promise<InstructionsWrapper> {
-    return this._marginfiAccount.makeDepositIx(this._program, this.client.banks, amount, bankAddress);
+  async makeDepositIx(amount: Amount, bankAddress: PublicKey,
+    override_banks: 
+    Map<string, Bank> | undefined = undefined): Promise<InstructionsWrapper> {
+      let banks = this.client.banks;
+      if (override_banks) {
+        for (const [key, value] of override_banks.entries()) {
+          banks.set(key, value);
+        }
+      }
+    return this._marginfiAccount.makeDepositIx(this._program, banks, amount, bankAddress);
   }
 
+  
   async deposit(amount: Amount, bankAddress: PublicKey, priorityFeeUi?: number): Promise<string> {
     const debug = require("debug")(`mfi:margin-account:${this.address.toString()}:deposit`);
     debug("Depositing %s into marginfi account (bank: %s)", amount, shortenAddress(bankAddress));
@@ -353,6 +362,7 @@ class MarginfiAccountWrapper {
     withdrawAll: boolean = false,
     priorityFeeUi?: number
   ): Promise<string> {
+    try {
     const debug = require("debug")(`mfi:margin-account:${this.address.toString()}:withdraw`);
     debug("Withdrawing %s from marginfi account", amount);
     const priorityFeeIx = this.makePriorityFeeIx(priorityFeeUi);
@@ -361,6 +371,11 @@ class MarginfiAccountWrapper {
     const sig = await this.client.processTransaction(tx, []);
     debug("Withdrawing successful %s", sig);
     return sig;
+    }
+    catch (e){
+        console.log(e);
+        return "newp"
+    }
   }
 
   async simulateWithdraw(
@@ -494,8 +509,15 @@ class MarginfiAccountWrapper {
     return this._marginfiAccount.makeBeginFlashLoanIx(this._program, endIndex);
   }
 
-  public async makeEndFlashLoanIx(): Promise<InstructionsWrapper> {
-    return this._marginfiAccount.makeEndFlashLoanIx(this._program, this.client.banks);
+  public async makeEndFlashLoanIx(override_banks: 
+    Map<string, Bank> | undefined = undefined): Promise<InstructionsWrapper> {
+      let banks = this.client.banks;
+      if (override_banks) {
+        for (const [key, value] of override_banks.entries()) {
+          banks.set(key, value);
+        }
+      }
+    return this._marginfiAccount.makeEndFlashLoanIx(this._program, banks);
   }
 
   public async flashLoan(args: FlashLoanArgs): Promise<string> {

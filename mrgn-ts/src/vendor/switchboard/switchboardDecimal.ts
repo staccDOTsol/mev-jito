@@ -1,3 +1,5 @@
+// @ts-nocheck
+
 import * as borsh from "@coral-xyz/borsh";
 import Big from "big.js";
 import BN from "bn.js";

@@ -24,25 +24,27 @@ const mrgnMetadata: any = await fetch("https://storage.googleapis.com/mrgn-publi
 const JSBI = defaultImport(jsbi);
 
 const ARB_CALCULATION_NUM_STEPS = config.get('arb_calculation_num_steps');
-const MAX_ARB_CALCULATION_TIME_MS = config.get('max_arb_calculation_time_ms') * config.get('num_worker_threads');
-const HIGH_WATER_MARK = 200 * config.get('num_worker_threads')
+const MAX_ARB_CALCULATION_TIME_MS = config.get('max_arb_calculation_time_ms');
+const HIGH_WATER_MARK = 14200;
 
 // rough ratio usdc (in decimals) to sol (in lamports) used in priority queue
 // assuming 1 sol = 20 usdc and 1 sol has 3 more decimals than usdc
 // this means one unit of usdc equals x units of sol
-const USDC_SOL_RATOs: any = {}
-const MAX_TRADE_AGE_MS = 3238;
+export const USDC_SOL_RATOs = {NATIVE_MINT: 1};
+const MAX_TRADE_AGE_MS = 600;
 
 type Route = {
   market: Market;
   fromA: boolean;
+  out: jsbi.default;
   tradeOutputOverride: null | {
     in: jsbi.default;
     estimatedOut: jsbi.default;
   };
+  quote: any | null;
 }[];
 
-type Quote = { in: jsbi.default; out: jsbi.default };
+type Quote = { in: jsbi.default; out: jsbi.default, quotes: any | null };
 
 type ArbIdea = {
   txn: VersionedTransaction;
@@ -52,7 +54,7 @@ type ArbIdea = {
   route: Route;
   timings: Timings;
 };
-
+const mintDecimals: any = {};
 async function calculateRoute(
   route: Route,
   arbSize: jsbi.default,
@@ -70,13 +72,10 @@ async function calculateRoute(
 
     const tradeOutputOverride = hop.tradeOutputOverride
       ? {
-          in: arbSizeString,
+          in: hop.tradeOutputOverride.in.toString(),
           estimatedOut: hop.tradeOutputOverride.estimatedOut.toString(),
         }
-      : {
-        in: arbSizeString,
-        estimatedOut: "0"
-      };
+      : null;
     serializableRoute.push({
       sourceMint,
       destinationMint,
@@ -87,7 +86,7 @@ async function calculateRoute(
   }
   const quote = await workerCalculateRoute(serializableRoute, timeout);
   if (quote === null) {
-    return { in: arbSize, out: JSBI.BigInt(0) };
+    return { in: arbSize, out: JSBI.BigInt(0), quotes: null };
   }
   return quote;
 }
@@ -99,8 +98,13 @@ function getProfitForQuote(quote: Quote) {
 async function* calculateArb(
   backrunnableTradesIterator: AsyncGenerator<BackrunnableTrade>,
 ): AsyncGenerator<ArbIdea> {
-
+const acceptable = [
+  "So11111111111111111111111111111111111111112",
+  "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263",
+  "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+]
 for (const item of mrgnMetadata){
+  if (!acceptable.includes(item.address)){
   // market to calculate usdc profit in sol
   if (!Object.keys(USDC_SOL_RATOs).includes(item.address)){
     const usdcToSolMkt = getMarketsForPair(
@@ -108,7 +112,7 @@ for (const item of mrgnMetadata){
         item.address
     )[0];
     if (!usdcToSolMkt) {
-      logger.error(`Could not find market for ${NATIVE_MINT.toBase58()} and ${item.address}`);
+      logger.debug(`Could not find market for ${NATIVE_MINT.toBase58()} and ${item.address}`);
       continue;
     }
     const big = JSBI.BigInt(1_000_000_000);
@@ -128,6 +132,7 @@ for (const item of mrgnMetadata){
     USDC_SOL_RATOs[item.address] = JSBI.toNumber(divided);
     }
   }
+}
   // prioritize trades that are bigger as profit is esssentially bottlenecked by the trade size
   // for this compare the size of base token (sol or usdc). bcs they have diff amounts of decimals and value
   // normalize usdc by a factor
@@ -211,6 +216,9 @@ for (const item of mrgnMetadata){
       ? originalMarket.tokenMintA
       : originalMarket.tokenMintB;
 
+      
+      
+     
     const backrunIntermediateMint = baseIsTokenA
       ? originalMarket.tokenMintB
       : originalMarket.tokenMintA;
@@ -238,29 +246,37 @@ for (const item of mrgnMetadata){
         route.push({
           market: originalMarket,
           fromA: baseIsTokenA,
+          out: tradeSizeQuote,
           tradeOutputOverride: {
             in: tradeSizeBase,
             estimatedOut: tradeSizeQuote,
           },
+          quote: null,
         });
         route.push({
           market: m,
           fromA: m.tokenMintA === backrunIntermediateMint,
           tradeOutputOverride: null,
+          out: tradeSizeBase,
+          quote: null,
         });
       } else {
         route.push({
           market: m,
           fromA: m.tokenMintA === backrunSourceMint,
           tradeOutputOverride: null,
+          out: tradeSizeBase,
+          quote: null,
         });
         route.push({
           market: originalMarket,
           fromA: !baseIsTokenA,
+          out: tradeSizeQuote,
           tradeOutputOverride: {
             in: tradeSizeQuote,
             estimatedOut: tradeSizeBase,
           },
+          quote: null,
         });
       }
       arbRoutes.push(route);
@@ -283,26 +299,34 @@ for (const item of mrgnMetadata){
         route.push({
           market: originalMarket,
           fromA: baseIsTokenA,
+          out: tradeSizeQuote,
           tradeOutputOverride: {
             in: tradeSizeBase,
             estimatedOut: tradeSizeQuote,
           },
+          quote: null,
         });
         route.push({
           market: market1,
+          out: tradeSizeBase,
           fromA: market1.tokenMintA === intermediateMint1,
           tradeOutputOverride: null,
+          quote: null,
         });
         route.push({
           market: market2,
+          out: tradeSizeQuote,
           fromA: market2.tokenMintA === intermediateMint2,
           tradeOutputOverride: null,
+          quote: null,
         });
       } else {
         route.push({
           market: market1,
+          out: tradeSizeBase,
           fromA: market1.tokenMintA === backrunSourceMint,
           tradeOutputOverride: null,
+          quote: null,
         });
         const intermediateMint1 =
           market1.tokenMintA === backrunSourceMint
@@ -310,16 +334,20 @@ for (const item of mrgnMetadata){
             : market1.tokenMintA;
         route.push({
           market: market2,
+          out: tradeSizeQuote,
           fromA: market2.tokenMintA === intermediateMint1,
           tradeOutputOverride: null,
+          quote: null,
         });
         route.push({
           market: originalMarket,
           fromA: !baseIsTokenA,
+          out: tradeSizeBase,
           tradeOutputOverride: {
             in: tradeSizeQuote,
             estimatedOut: tradeSizeBase,
           },
+          quote: null,
         });
       }
       arbRoutes.push(route);
@@ -345,26 +373,27 @@ for (const item of mrgnMetadata){
       `Found ${arbRoutes.length} arb routes from ${marketsFor2HopBackrun.length} 2hop routes`,
     );
     }
-    const startCalculation = new Date().getTime();
+    
+    const startCalculation = Date.now();
 
     // map of best quotes for each route
     const bestQuotes: Map<Route, Quote> = new Map();
 
     for (let i = 1; i <= ARB_CALCULATION_NUM_STEPS; i++) {
       let foundBetterQuote = false;
-      if (new Date().getTime() - startCalculation > MAX_ARB_CALCULATION_TIME_MS) {
+      if (Date.now() - startCalculation > MAX_ARB_CALCULATION_TIME_MS) {
         logger.info(
-          `Arb calculation took too long, stopping at iteration ${i}`,
+          `Arb calculation took too long, not stopping at iteration ${i}`,
         );
-        break;
+       break;
       }
       const arbSize = JSBI.multiply(stepSize, JSBI.BigInt(i));
-      logger.info(`Calculating arb for size ${arbSize.toString()}`);
+
       const quotePromises: Promise<Quote>[] = [];
 
       for (const route of arbRoutes) {
         const remainingCalculationTime =
-          MAX_ARB_CALCULATION_TIME_MS - (new Date().getTime() - startCalculation);
+          MAX_ARB_CALCULATION_TIME_MS - (Date.now() - startCalculation);
         const quotePromise = calculateRoute(
           route,
           arbSize,
@@ -392,6 +421,9 @@ for (const item of mrgnMetadata){
           : JSBI.BigInt(0);
 
         if (JSBI.greaterThan(profit, prevBestProfit)) {
+          arbRoutes[i].forEach((r) => {
+            r.quote = quote.quotes
+          })
           bestQuotes.set(arbRoutes[i], quote);
           foundBetterQuote = true;
         } else {
@@ -402,16 +434,16 @@ for (const item of mrgnMetadata){
         break;
       }
     }
+
     // no quotes with positive profit found
     if (bestQuotes.size === 0) continue;
-    
+
     logger.info(`Found ${bestQuotes.size} arb opportunities`);
-    
-
-
+   
     // find the best quote
     const [route, quote] = [...bestQuotes.entries()].reduce((best, current) => {
       const currentQuote = current[1];
+     
       const currentProfit = getProfitForQuote(currentQuote);
       const bestQuote = best[1];
       const bestProfit = getProfitForQuote(bestQuote);
@@ -423,14 +455,18 @@ for (const item of mrgnMetadata){
     });
     const profit = getProfitForQuote(quote);
     const arbSize = quote.in;
-    const backrunSourceMintMint = await connection.getParsedAccountInfo(new PublicKey(backrunSourceMint));
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-    // @ts-ignore
-    const decimals = backrunSourceMintMint.value.data.parsed.info.decimals;
+    if (!Object.keys(mintDecimals).includes(backrunSourceMint)){
+      const backrunSourceMintMint = await connection.getParsedAccountInfo(new PublicKey(backrunSourceMint));
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore
+      const decimals = backrunSourceMintMint.value.data.parsed.info.decimals;
+      mintDecimals[backrunSourceMint] = decimals;
+    }
     const backrunSourceMintName = backrunSourceMint
 
-    const profitDecimals = toDecimalString(profit.toString(), decimals);
-    const arbSizeDecimals = toDecimalString(arbSize.toString(), decimals);
+    const profitDecimals = toDecimalString(profit.toString(), mintDecimals[backrunSourceMint]);
+    const arbSizeDecimals = toDecimalString(arbSize.toString(), mintDecimals[backrunSourceMint]);
+
 
     const marketsString = route.reduce((acc, r) => {
       return `${acc} -> ${r.market.dexLabel}`;
@@ -439,7 +475,6 @@ for (const item of mrgnMetadata){
     logger.info(
       `Potential arb: profit ${profitDecimals} ${backrunSourceMintName} on ${originalMarket.dexLabel} ::: BUY ${arbSizeDecimals} on ${marketsString} backrunning ${bs58.encode(txn.signatures[0])}`,
     );
-
     yield {
       txn,
       arbSize,

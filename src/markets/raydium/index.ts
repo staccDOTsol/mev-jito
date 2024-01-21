@@ -43,7 +43,7 @@ for (let i = 0; i < POOLS_JSON.unOfficial.length; i++) {
       }
     }
     
-    if (Math.random() <= 0.05) {
+    if (Math.random() <= 1) {
       if (!pools.includes(POOLS_JSON.unOfficial[i])) {
         pools.push(POOLS_JSON.unOfficial[i]);
       }
@@ -73,7 +73,7 @@ for (let i = 0; i < vaults.length; i += 100) {
     const balance = balances[j];
     if (balance == undefined) continue;
     // pools is half the length of vaults
-    const pool = pools[i];
+    const pool = pools[i+j];
     // eslint-disable-next-line @typescript-eslint/ban-ts-comment
     // @ts-ignore
     if (balance.data?.parsed == undefined) continue;
@@ -107,17 +107,43 @@ fs.writeFileSync('./src/markets/raydium/addressesToFetch.json', JSON.stringify(a
 }
 }
 }
-for (let i = 0; i < addressesToFetch.length; i += 100) {
-  const batch = addressesToFetch.slice(i, i + 100);
-  const accounts = await connection.getMultipleAccountsInfo(batch);
-  for (let j = 0; j < accounts.length; j++) {
-    initialAccountBuffers.set(batch[j].toBase58(), accounts[j]);
+const tpools: any = []
+for (const i in POOLS_JSON.unOfficial) {
+  if (Math.random() <= 0.06138) {
+    if (!tpools.includes(POOLS_JSON.unOfficial[i])) {
+      tpools.push(POOLS_JSON.unOfficial[i]);
+    }
   }
-  console.log(`Fetched ${i + 100} accounts / total` + addressesToFetch.length);
 }
-
+tpools.push(...POOLS_JSON.official);
+for (const pool of tpools){
+  if (addressesToFetch.includes(new PublicKey(pool.id))) continue;
+  if (addressesToFetch.includes(new PublicKey(pool.marketId))) continue;
+    addressesToFetch.push(new PublicKey(pool.id));
+    addressesToFetch.push(new PublicKey(pool.marketId));
+}
+for (let i = 0; i < addressesToFetch.length; i += 500) {
+  const batchPromises = [];
+  for (let j = 0; j < 5; j++) {
+    const batchStart = i + (j * 100);
+    if (batchStart < addressesToFetch.length) {
+      const batch = addressesToFetch.slice(batchStart, batchStart + 100);
+      batchPromises.push(connection.getMultipleAccountsInfo(batch));
+    }
+  }
+  const accountsArray = await Promise.all(batchPromises);
+  for (let j = 0; j < accountsArray.length; j++) {
+    const accounts = accountsArray[j];
+    const batchStart = i + (j * 100);
+    const batch = addressesToFetch.slice(batchStart, batchStart + 100);
+    for (let k = 0; k < accounts.length; k++) {
+      initialAccountBuffers.set(batch[k].toBase58(), accounts[k]);
+    }
+  }
+  console.log(`Fetched ${Math.min(i + 500, addressesToFetch.length)} accounts / total` + addressesToFetch.length);
+}
 class RaydiumDEX extends DEX {
-  pools: ApiPoolInfoItem[];
+  public pools: ApiPoolInfoItem[];
 
   constructor() {
     super(DexLabel.RAYDIUM);
@@ -131,46 +157,44 @@ class RaydiumDEX extends DEX {
         console.log(this.pools.length);
       }
     }
-
     for (const pool of this.pools) {
      
-                  
-              const serumProgramId = new PublicKey(pool.marketProgramId);
-              const serumMarket = new PublicKey(pool.marketId);
-              const serumParams = RaydiumAmm.decodeSerumMarketKeysString(
-                new PublicKey(pool.id),
-                serumProgramId,
-                serumMarket,
-                initialAccountBuffers.get(serumMarket.toBase58()),
-              );
-
-              this.ammCalcAddPoolMessages.push({
-                type: 'addPool',
-                payload: {
-                  poolLabel: this.label,
-                  id: pool.id,
-                  feeRateBps: 25,
-                  serializableAccountInfo: toSerializableAccountInfo(
-                    initialAccountBuffers.get(pool.id),
-                  ),
-                  serumParams: serumParams,
-                },
-              });
-              const market: Market = {
-                tokenMintA: pool.baseMint,
-                tokenVaultA: pool.baseVault,
-                tokenMintB: pool.quoteMint,
-                tokenVaultB: pool.quoteVault,
-                dexLabel: this.label,
-                id: pool.id,
-              };
             
-              const pairString = toPairString(pool.baseMint, pool.quoteMint);
-              if (this.pairToMarkets.has(pairString)) {
-                this.pairToMarkets.get(pairString).push(market);
-              } else {
-                this.pairToMarkets.set(pairString, [market]);
-              
+        const serumProgramId = new PublicKey(pool.marketProgramId);
+        const serumMarket = new PublicKey(pool.marketId);
+        const serumParams = RaydiumAmm.decodeSerumMarketKeysString(
+          new PublicKey(pool.id),
+          serumProgramId,
+          serumMarket,
+          initialAccountBuffers.get(serumMarket.toBase58()),
+        );
+
+        this.ammCalcAddPoolMessages.push({
+          type: 'addPool',
+          payload: {
+            poolLabel: this.label,
+            id: pool.id,
+            feeRateBps: 25+138/2,
+            serializableAccountInfo: toSerializableAccountInfo(
+              initialAccountBuffers.get(pool.id),
+            ),
+            serumParams: serumParams,
+          },
+        });
+        const market: Market = {
+          tokenMintA: pool.baseMint,
+          tokenVaultA: pool.baseVault,
+          tokenMintB: pool.quoteMint,
+          tokenVaultB: pool.quoteVault,
+          dexLabel: this.label,
+          id: pool.id,
+        };
+      
+        const pairString = toPairString(pool.baseMint, pool.quoteMint);
+        if (this.pairToMarkets.has(pairString)) {
+          this.pairToMarkets.get(pairString).push(market);
+        } else {
+          this.pairToMarkets.set(pairString, [market]);
       }
     }
   }

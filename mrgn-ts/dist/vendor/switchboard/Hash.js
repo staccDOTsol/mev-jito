@@ -30,6 +30,7 @@ class Hash {
         this.data = fields.data;
     }
     static layout(property) {
+        // @ts-ignore
         return borsh.struct([borsh.array(borsh.u8(), 32, "data")], property);
     }
     static fromDecoded(obj) {

@@ -24,6 +24,7 @@ var __importStar = (this && this.__importStar) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AggregatorAccountData = void 0;
+// @ts-nocheck
 const borsh = __importStar(require("@coral-xyz/borsh"));
 const switchboardDecimal_1 = require("./switchboardDecimal");
 const aggregatorRound_1 = require("./aggregatorRound");

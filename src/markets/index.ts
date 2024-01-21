@@ -92,16 +92,24 @@ const initialAccountBuffers: Map<string, AccountInfo<Buffer> | null> =
 const addressesToFetch: PublicKey[] = [...accountsForGeyserUpdateSet].map(
   (a) => new PublicKey(a),
 );
-
-for (let i = 0; i < addressesToFetch.length; i += 100) {
-  const batch = addressesToFetch.slice(i, i + 100);
-  const accounts = await connection.getMultipleAccountsInfo(batch);
-  for (let j = 0; j < accounts.length; j++) {
-    initialAccountBuffers.set(batch[j].toBase58(), accounts[j]);
+for (let i = 0; i < addressesToFetch.length; i += 500) {
+  const batchPromises = [];
+  for (let j = 0; j < 5; j++) {
+    const batchStart = i + (j * 100);
+    const batch = addressesToFetch.slice(batchStart, batchStart + 100);
+    batchPromises.push(connection.getMultipleAccountsInfo(batch));
   }
-  console.log(`Fetched ${i + 100} accounts / total` + addressesToFetch.length);
+  const accountsArray = await Promise.all(batchPromises);
+  for (let j = 0; j < accountsArray.length; j++) {
+    const accounts = accountsArray[j];
+    const batchStart = i + (j * 100);
+    const batch = addressesToFetch.slice(batchStart, batchStart + 100);
+    for (let k = 0; k < accounts.length; k++) {
+      initialAccountBuffers.set(batch[k].toBase58(), accounts[k]);
+    }
+  }
+  console.log(`Fetched ${i + 500} accounts / total` + addressesToFetch.length);
 }
-
 
 let seedAccountInfoPromises: Promise<AmmCalcWorkerResultMessage>[] = [];
 // seed account info in workers
@@ -354,6 +362,7 @@ async function calculateRoute(
   const payload = result.payload as CalculateRouteResultPayload;
   const serializableQuote = payload.quote;
   return {
+    quotes: serializableQuote.quotes,
     in: JSBI.BigInt(Math.floor(parseFloat(serializableQuote.in))),
     out: JSBI.BigInt(Math.floor(parseFloat(serializableQuote.out))),
   };

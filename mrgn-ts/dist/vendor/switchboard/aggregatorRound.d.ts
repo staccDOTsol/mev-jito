@@ -32,7 +32,7 @@ export declare class AggregatorRound {
     /** Keeps track of which errors are fulfilled here. */
     errorsFulfilled: any;
     constructor(fields: any);
-    static layout(property: any): any;
+    static layout(property: any): import("buffer-layout").Structure<unknown>;
     static fromDecoded(obj: any): AggregatorRound;
     static toEncodable(fields: any): {
         numSuccess: any;

@@ -11,9 +11,8 @@ import { Timings } from './types.js';
 import { dropBeyondHighWaterMark } from './utils.js';
 import { logger } from './logger.js';
 import bs58 from 'bs58';
-import { config } from './config.js';
 
-const HIGH_WATER_MARK = 250 * config.get('num_worker_threads')
+const HIGH_WATER_MARK = 11222;
 
 enum TradeDirection {
   SOLD_BASE = 'SOLD_BASE',
@@ -92,7 +91,6 @@ async function* postSimulateFilter(
       const market = getMarketForVault(accountOfInterest);
       markets.add(market);
     }
-
     for (const market of markets) {
       const preSimTokenAccountVaultA = preSimTokenAccounts.get(
         market.tokenVaultA,
@@ -109,6 +107,7 @@ async function* postSimulateFilter(
 
       const tokenAIsBase =
       isTokenAccountOfInterest(market.tokenVaultA);
+      
 
       const tokenADiff =
         postSimTokenAccountVaultA.amount - preSimTokenAccountVaultA.amount;
@@ -125,6 +124,7 @@ async function* postSimulateFilter(
       if (didNotChangeVaults || addOrRemoveLiq) {
         continue;
       }
+      
 
       logger.debug(
         `${market.dexLabel} ${bs58.encode(txn.signatures[0])} \n${

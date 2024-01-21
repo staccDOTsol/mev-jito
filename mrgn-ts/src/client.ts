@@ -601,16 +601,17 @@ class MarginfiClient {
           console.log(error.logs.join("\n"));
           const errorParsed = parseErrorFromLogs(error.logs, this.config.programId);
           console.log("Parsed:", errorParsed);
-          throw new ProcessTransactionError(
+          console.log((
             errorParsed?.description ?? error.message,
             ProcessTransactionErrorType.SimulationError,
             error.logs
-          );
+          ));
         }
       }
       console.log(error);
-      throw new ProcessTransactionError(error.message, ProcessTransactionErrorType.FallthroughError);
+      console.log(error.message, ProcessTransactionErrorType.FallthroughError);
     }
+    return signature ? signature : ""
   }
 
   async simulateTransaction(

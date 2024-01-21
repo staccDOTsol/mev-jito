@@ -1,3 +1,4 @@
+// @ts-nocheck
 import * as borsh from "@coral-xyz/borsh";
 import { SwitchboardDecimal } from "./switchboardDecimal";
 import { AggregatorRound } from "./aggregatorRound";

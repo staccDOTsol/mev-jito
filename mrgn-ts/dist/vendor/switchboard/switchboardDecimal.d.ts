@@ -13,7 +13,7 @@ export declare class SwitchboardDecimal {
         mantissa: any;
         scale: any;
     });
-    static layout(property: any): any;
+    static layout(property: any): import("buffer-layout").Structure<unknown>;
     static fromDecoded(obj: {
         mantissa: any;
         scale: any;

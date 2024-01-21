@@ -126,8 +126,14 @@ class MarginfiAccountWrapper {
     // --------------------------------------------------------------------------
     // User actions
     // --------------------------------------------------------------------------
-    async makeDepositIx(amount, bankAddress) {
-        return this._marginfiAccount.makeDepositIx(this._program, this.client.banks, amount, bankAddress);
+    async makeDepositIx(amount, bankAddress, override_banks = undefined) {
+        let banks = this.client.banks;
+        if (override_banks) {
+            for (const [key, value] of override_banks.entries()) {
+                banks.set(key, value);
+            }
+        }
+        return this._marginfiAccount.makeDepositIx(this._program, banks, amount, bankAddress);
     }
     async deposit(amount, bankAddress, priorityFeeUi) {
         const debug = require("debug")(`mfi:margin-account:${this.address.toString()}:deposit`);
@@ -186,14 +192,20 @@ class MarginfiAccountWrapper {
         return this._marginfiAccount.makeWithdrawIx(this._program, this.client.banks, amount, bankAddress, withdrawAll);
     }
     async withdraw(amount, bankAddress, withdrawAll = false, priorityFeeUi) {
-        const debug = require("debug")(`mfi:margin-account:${this.address.toString()}:withdraw`);
-        debug("Withdrawing %s from marginfi account", amount);
-        const priorityFeeIx = this.makePriorityFeeIx(priorityFeeUi);
-        const ixs = await this.makeWithdrawIx(amount, bankAddress, withdrawAll);
-        const tx = new web3_js_1.Transaction().add(...priorityFeeIx, ...ixs.instructions);
-        const sig = await this.client.processTransaction(tx, []);
-        debug("Withdrawing successful %s", sig);
-        return sig;
+        try {
+            const debug = require("debug")(`mfi:margin-account:${this.address.toString()}:withdraw`);
+            debug("Withdrawing %s from marginfi account", amount);
+            const priorityFeeIx = this.makePriorityFeeIx(priorityFeeUi);
+            const ixs = await this.makeWithdrawIx(amount, bankAddress, withdrawAll);
+            const tx = new web3_js_1.Transaction().add(...priorityFeeIx, ...ixs.instructions);
+            const sig = await this.client.processTransaction(tx, []);
+            debug("Withdrawing successful %s", sig);
+            return sig;
+        }
+        catch (e) {
+            console.log(e);
+            return "newp";
+        }
     }
     async simulateWithdraw(amount, bankAddress, withdrawAll = false) {
         const ixs = await this.makeWithdrawIx(amount, bankAddress, withdrawAll);
@@ -265,8 +277,14 @@ class MarginfiAccountWrapper {
     async makeBeginFlashLoanIx(endIndex) {
         return this._marginfiAccount.makeBeginFlashLoanIx(this._program, endIndex);
     }
-    async makeEndFlashLoanIx() {
-        return this._marginfiAccount.makeEndFlashLoanIx(this._program, this.client.banks);
+    async makeEndFlashLoanIx(override_banks = undefined) {
+        let banks = this.client.banks;
+        if (override_banks) {
+            for (const [key, value] of override_banks.entries()) {
+                banks.set(key, value);
+            }
+        }
+        return this._marginfiAccount.makeEndFlashLoanIx(this._program, banks);
     }
     async flashLoan(args) {
         const debug = require("debug")(`mfi:margin-account:${this.address.toString()}:flash-loan`);

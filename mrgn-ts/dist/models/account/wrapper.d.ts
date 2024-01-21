@@ -62,7 +62,7 @@ declare class MarginfiAccountWrapper {
     computeLiquidationPriceForBankAmount(bankAddress: PublicKey, isLending: boolean, amount: number): number | null;
     computeNetApy(): number;
     makePriorityFeeIx(priorityFeeUi?: number): TransactionInstruction[];
-    makeDepositIx(amount: Amount, bankAddress: PublicKey): Promise<InstructionsWrapper>;
+    makeDepositIx(amount: Amount, bankAddress: PublicKey, override_banks?: Map<string, Bank> | undefined): Promise<InstructionsWrapper>;
     deposit(amount: Amount, bankAddress: PublicKey, priorityFeeUi?: number): Promise<string>;
     simulateDeposit(amount: Amount, bankAddress: PublicKey): Promise<SimulationResult>;
     makeRepayIx(amount: Amount, bankAddress: PublicKey, repayAll?: boolean): Promise<InstructionsWrapper>;
@@ -81,7 +81,7 @@ declare class MarginfiAccountWrapper {
     makeLendingAccountLiquidateIx(liquidateeMarginfiAccount: MarginfiAccount, assetBankAddress: PublicKey, assetQuantityUi: Amount, liabBankAddress: PublicKey): Promise<InstructionsWrapper>;
     lendingAccountLiquidate(liquidateeMarginfiAccount: MarginfiAccount, assetBankAddress: PublicKey, assetQuantityUi: Amount, liabBankAddress: PublicKey): Promise<string>;
     makeBeginFlashLoanIx(endIndex: number): Promise<InstructionsWrapper>;
-    makeEndFlashLoanIx(): Promise<InstructionsWrapper>;
+    makeEndFlashLoanIx(override_banks?: Map<string, Bank> | undefined): Promise<InstructionsWrapper>;
     flashLoan(args: FlashLoanArgs): Promise<string>;
     getHealthCheckAccounts(mandatoryBanks?: Bank[], excludedBanks?: Bank[]): AccountMeta[];
     private static _fetchAccountData;

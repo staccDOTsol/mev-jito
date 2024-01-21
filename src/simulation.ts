@@ -6,10 +6,9 @@ import { SimulatedBundleResponse } from 'jito-ts';
 import { FilteredTransaction } from './pre-simulation-filter.js';
 import { Timings } from './types.js';
 import { Queue } from '@datastructures-js/queue';
-import { config } from './config.js';
 
-const MAX_SIMULATION_AGE_MS = 1666;
-const MAX_PENDING_SIMULATIONS = 200 * config.get('num_worker_threads');
+const MAX_SIMULATION_AGE_MS = 333;
+const MAX_PENDING_SIMULATIONS = 666;
 const RECEIVED_SIMULATION_RESULT_EVENT = 'receivedSimulationResult';
 
 type SimulationResult = {
@@ -98,7 +97,10 @@ async function* simulate(
     const txnAge = new Date().getTime() - timings.mempoolEnd;
 
     if (txnAge > MAX_SIMULATION_AGE_MS) {
-      logger.debug(`not dropping slow simulation - age: ${txnAge}ms`);
+      logger.debug(`hehe not dropping slow simulation - age: ${txnAge}ms`);
+      continue
+    }
+    if (response === null) {
       continue;
     }
     if (response.value.transactionResults.length > 0) {

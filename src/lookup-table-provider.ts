@@ -33,7 +33,7 @@ class LookupTableProvider {
     );
   }
 
-  private  async updateCache(
+  public  async updateCache(
     lutAddress: PublicKey,
     lutAccount: AddressLookupTableAccount,
   ) {
@@ -97,7 +97,6 @@ class LookupTableProvider {
     if (lut.value === null) {
       return null;
     }
-
     this.updateCache(lutAddress, lut.value);
 
     return lut.value;
@@ -106,7 +105,7 @@ class LookupTableProvider {
   async computeIdealLookupTablesForAddresses(
     addresses: PublicKey[],
   ): Promise<AddressLookupTableAccount[]> {
-    const MIN_ADDRESSES_TO_INCLUDE_TABLE = 1;
+    const MIN_ADDRESSES_TO_INCLUDE_TABLE = 4;
     const MAX_TABLE_COUNT = 16;
 
     const startCalc = new Date().getTime();

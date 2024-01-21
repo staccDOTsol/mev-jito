@@ -7,13 +7,11 @@ import { isTokenAccountOfInterest } from './markets/index.js';
 import { MempoolUpdate } from './mempool.js';
 import { Timings } from './types.js';
 import { lookupTableProvider } from './lookup-table-provider.js';
-import { config } from './config.js';
 
 const SKIP_TX_IF_CONTAINS_ADDRESS = [
-  '882DFRCi5akKFyYxT4PP2vZkoQEGvm2Nsind2nPDuGqu', // orca whirlpool mm whose rebalancing txns mess with the calc down the line and is no point in backrunning
 ];
 
-const HIGH_WATER_MARK = 450 * config.get('num_worker_threads')
+const HIGH_WATER_MARK = 300;
 
 type FilteredTransaction = {
   txn: VersionedTransaction;

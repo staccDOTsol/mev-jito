@@ -4,7 +4,7 @@ export declare class Hash {
     constructor(fields: {
         data: any;
     });
-    static layout(property: any): any;
+    static layout(property: any): import("buffer-layout").Structure<unknown>;
     static fromDecoded(obj: {
         data: any;
     }): Hash;

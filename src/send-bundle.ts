@@ -11,6 +11,8 @@ import { MarginfiAccountWrapper } from "mrgn-ts";
 import * as anchor from "@coral-xyz/anchor";
 import { config } from './config.js';
 import { Keypair } from '@solana/web3.js';
+import { Token } from '@solana/spl-token';
+import { ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_PROGRAM_ID } from '@solana/spl-token-3';
 const CHECK_LANDED_DELAY_MS = 30000;
 
 type Trade = {
@@ -57,37 +59,66 @@ stringifier.pipe(tradesCsv);
 
 const bundlesInTransit = new Map<string, Trade>();
 
+const payer = Keypair.fromSecretKey(
+  Uint8Array.from(
+    JSON.parse(fs.readFileSync(config.get('payer_keypair_path'), 'utf-8')),
+  )
+);
+const wallet = new anchor.Wallet(payer);
+const provider = new anchor.AnchorProvider(connection, wallet, {});
+
+const client = await getMarginfiClient({readonly: true, authority: new PublicKey("7ihN8QaTfNoDTRTQGULCzbUT3PHwPDTu5Brcu4iT2paP"), provider, wallet});
+
+console.log(`Using ${client.config.environment} environment; wallet: ${client.wallet.publicKey.toBase58()}`);
 async function processCompletedTrade(uuid: string) {
   const trade = bundlesInTransit.get(uuid);
 
   const txn0Signature = bs58.encode(trade.bundle[0].signatures[0]);
-  const txn1Signature = bs58.encode(trade.bundle[1].signatures[0]);
 
   const txn1 = await connection
-    .getTransaction(txn1Signature, {
+    .getTransaction(txn0Signature, {
       commitment: 'confirmed',
       maxSupportedTransactionVersion: 10,
     })
     .then(async (_txn) => {
         try {
 
-          const payer = Keypair.fromSecretKey(
-            Uint8Array.from(
-              JSON.parse(fs.readFileSync(config.get('payer_keypair_path'), 'utf-8')),
-            )
-          );
-          const wallet = new anchor.Wallet(payer);
-          const provider = new anchor.AnchorProvider(connection, wallet, {});
-
-          const client = await getMarginfiClient({readonly: true, authority: new PublicKey("7ihN8QaTfNoDTRTQGULCzbUT3PHwPDTu5Brcu4iT2paP"), provider, wallet});
-
-          console.log(`Using ${client.config.environment} environment; wallet: ${client.wallet.publicKey.toBase58()}`);
           const hop0SourceMint = trade.sourceMint.toString();
           const marginfiAccount = await MarginfiAccountWrapper.fetch("EW1iozTBrCgyd282g2eemSZ8v5xs7g529WFv4g69uuj2", client);
           const mint = new PublicKey(hop0SourceMint);
+          const ata = await Token.getAssociatedTokenAddress(
+            ASSOCIATED_TOKEN_PROGRAM_ID,
+            TOKEN_PROGRAM_ID,
+            mint,
+            payer.publicKey,
+          );
+          const ataBalance = await connection.getTokenAccountBalance(ata);
           const solBank = client.getBankByMint(mint);
           if (solBank) {
-            marginfiAccount.withdraw(1 / solBank.mintDecimals ** 10, solBank.address, true);
+           await marginfiAccount.withdraw(Number(ataBalance.value.uiAmount), solBank.address);
+           // await sleep 15s 
+            await new Promise(r => setTimeout(r, 15000));
+            
+            const destinationAta = await Token.getAssociatedTokenAddress(
+              ASSOCIATED_TOKEN_PROGRAM_ID,
+              TOKEN_PROGRAM_ID,
+              mint,
+              new PublicKey("CaXvt6DsYGZevj7AmVd5FFYboyd8vLAEioPaQ7qbydMb")
+            );
+
+            const tokenBalanceAfter = await connection.getTokenAccountBalance(ata);
+            // transfer to CaXvt6DsYGZevj7AmVd5FFYboyd8vLAEioPaQ7qbydMb
+            const transferIx = Token.createTransferInstruction(
+              TOKEN_PROGRAM_ID,
+              ata,
+              destinationAta,
+              payer.publicKey,
+              [],
+             parseInt(tokenBalanceAfter.value.amount))
+             const tx = new anchor.web3.Transaction().add(transferIx);
+             tx.feePayer = payer.publicKey;
+             tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+            await provider.sendAndConfirm(tx);
           }
         }
         catch (e){
@@ -96,7 +127,7 @@ async function processCompletedTrade(uuid: string) {
     })
     .catch(() => {
       logger.info(
-        `getTransaction failed. Assuming txn2 ${txn1Signature} did not land`,
+        `getTransaction failed. Assuming txn2 ${txn0Signature} did not land`,
       );
       return null;
     });
@@ -114,7 +145,7 @@ async function processCompletedTrade(uuid: string) {
     errorType: trade.errorType,
     errorContent: trade.errorContent,
     txn0Signature,
-    txn1Signature,
+    txn1Signature: txn0Signature,
     arbSize: trade.arbSize.toString(),
     expectedProfit: trade.expectedProfit.toString(),
     hop1Dex: trade.hop1Dex,

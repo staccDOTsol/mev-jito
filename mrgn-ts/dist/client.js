@@ -419,12 +419,15 @@ class MarginfiClient {
                     console.log(error.logs.join("\n"));
                     const errorParsed = (0, errors_1.parseErrorFromLogs)(error.logs, this.config.programId);
                     console.log("Parsed:", errorParsed);
-                    throw new errors_1.ProcessTransactionError(errorParsed?.description ?? error.message, errors_1.ProcessTransactionErrorType.SimulationError, error.logs);
+                    console.log((errorParsed?.description ?? error.message,
+                        errors_1.ProcessTransactionErrorType.SimulationError,
+                        error.logs));
                 }
             }
             console.log(error);
-            throw new errors_1.ProcessTransactionError(error.message, errors_1.ProcessTransactionErrorType.FallthroughError);
+            console.log(error.message, errors_1.ProcessTransactionErrorType.FallthroughError);
         }
+        return signature ? signature : "";
     }
     async simulateTransaction(transaction, accountsToInspect) {
         let versionedTransaction;

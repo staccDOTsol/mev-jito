@@ -226,8 +226,9 @@ export type SerializableRoute = {
   }
 }[];
 
-export type Quote = { in: jsbi.default; out: jsbi.default };
+export type Quote = { in: jsbi.default; out: jsbi.default, quotes: any | null }
 export type SerializableQuote = {
   in: string;
   out: string;
+  quotes: any | null
 };

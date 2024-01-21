@@ -53,7 +53,7 @@ const workerId = workerData.workerId;
 
 const logger = loggerOrig.child({ name: 'calc-worker' + workerId });
 
-logger.info('AmmCalcWorker started');
+logger.debug('AmmCalcWorker started');
 
 const pools: Map<string, Amm> = new Map();
 const accountsForUpdateForPool: Map<string, string[]> = new Map();
@@ -164,7 +164,7 @@ function accountUpdate(
         if (!hasNullAccountInfo) ammIsInitialized.set(ammId, true);
       } catch (e) {
         error = true;
-        logger.warn(`Error updating pool ${ammId}: ${e}`);
+        logger.info(`Error updating pool ${ammId}: ${e}`);
       }
     } else {
       logger.trace(
@@ -197,9 +197,9 @@ async function calulateQuote(id: string, params: QuoteParams) {
       sourceMint: params.sourceMint.toBase58(),
       destinationMint: params.destinationMint.toBase58(),
       swapMode: params.swapMode == SwapMode.ExactIn ? 'ExactIn' : 'ExactOut',
-      maxAccounts: "21",
-      asLegacyTransaction: "false",
-      slippageBps: "6666"
+      slippageBps: "138",
+      maxAccounts: "25",
+                asLegacyTransaction: "true"
     };
 
     // Check if the base URL in config is valid and ends with a slash or not
@@ -223,6 +223,7 @@ async function calulateQuote(id: string, params: QuoteParams) {
       };
     }
     else {
+      logger.debug(`Quote for pool ${id}: ${JSON.stringify(quote)}`);
       const serializableQuote = toSerializableJupiterQuote(quote);
 
       message = {
@@ -233,6 +234,7 @@ async function calulateQuote(id: string, params: QuoteParams) {
       };
     }
   } catch (e) {
+    logger.info(`Error calculating quote for pool ${id}: ${e}`);
     message = {
       type: 'calculateQuote',
       payload: {
@@ -267,7 +269,7 @@ async function calculateHop(amm: Amm, quoteParams: QuoteParams): Promise<Quote> 
       if (info === null) hasNullAccountInfo = true;
     }
 
-    logger.info(`Updating pool ${ammId}`);
+    logger.debug(`Updating pool ${ammId}`);
     if (accountInfoMap.size === accountsForUpdate.length) {
       try {
         amm.update(accountInfoMap);
@@ -279,23 +281,23 @@ async function calculateHop(amm: Amm, quoteParams: QuoteParams): Promise<Quote> 
       logger.trace(
         `Not all accounts for update are available for pool ${ammId}`,
       );
-      return { in: quoteParams.amount, out: JSBI.BigInt(0) };
+      return { in: quoteParams.amount, out: JSBI.BigInt(0), quotes: null };
 
     }
   
 
     }
-    
-    // Assuming params and config are already defined and valid
     const queryParams = {
-      amount: JSBI.toNumber(quoteParams.amount).toString(),
+      amount: quoteParams.amount.toString(),
       sourceMint: quoteParams.sourceMint.toBase58(),
       destinationMint: quoteParams.destinationMint.toBase58(),
       swapMode: quoteParams.swapMode == SwapMode.ExactIn ? 'ExactIn' : 'ExactOut',
-      slippageBps: "6666",
-      maxAccounts: "21",
-      asLegacyTransaction: "false"
+      slippageBps: "138",
+      maxAccounts: "25",
+                asLegacyTransaction: "true"
     };
+    logger.debug(`Calculating quote for pool ${amm.id}`);
+    logger.debug(queryParams)
 
     // Check if the base URL in config is valid and ends with a slash or not
     const baseUrl = config.url;
@@ -306,15 +308,17 @@ async function calculateHop(amm: Amm, quoteParams: QuoteParams): Promise<Quote> 
       ...config,
       url: fullUrl.replace('sourceMint', 'inputMint').replace('destinationMint', 'outputMint')
     };
+    logger.debug(`Calculating quote for pool ${amm.id}`);
     const jupQuote = await(await axios.request(ourConfig)).data;
     if (jupQuote === null) {
-      return { in: quoteParams.amount, out: JSBI.BigInt(0) };
+      return { in: quoteParams.amount, out: JSBI.BigInt(0), quotes: null };
     }
-
-    const quote = { in: jupQuote.inAmount, out: jupQuote.outAmount };
+    logger.debug(`Quote for pool ${amm.id}: ${JSON.stringify(jupQuote)}`);
+    const quote = { in: jupQuote.inAmount, out: jupQuote.outAmount, quotes: jupQuote };
 
     return quote;
   } catch (e) {
+    logger.debug(`Error calculating quote for pool ${amm.id}: ${e}`);
     for (const address of [quoteParams.destinationMint, quoteParams.sourceMint]) {
       const amms = ammsForAccount.get(address.toBase58()) || [];
       for (const ammId of amms) {
@@ -342,15 +346,18 @@ async function calculateHop(amm: Amm, quoteParams: QuoteParams): Promise<Quote> 
 
       }
     }
-    return { in: quoteParams.amount, out: JSBI.BigInt(0) };
+    return { in: quoteParams.amount, out: JSBI.BigInt(0), quotes: null };
   }
 }
 
 async function calculateRoute(route: SerializableRoute) {
   logger.debug(route, `Calculating route`);
   let amount = Number(route[0].amount);
+  let amount2 = JSBI.BigInt(route[0].amount);
   let firstIn = null;
+  const quotes: any = [];
   for (const hop of route) {
+    logger.debug(hop)
     if (hop.tradeOutputOverride !== null) {
       const tradeOutputOverride = hop.tradeOutputOverride;
       const overrideInputAmount = Number(tradeOutputOverride.in);
@@ -368,7 +375,7 @@ async function calculateRoute(route: SerializableRoute) {
         )
       );
 
-      if (!firstIn) firstIn = amount;
+      if (!firstIn) firstIn = amount2;
 
       const scalingFactor = (10000);
 
@@ -389,17 +396,20 @@ async function calculateRoute(route: SerializableRoute) {
 
       // Scale the result back down after the calculation
       amount = (amount / scalingFactor);
-      continue;
+      amount2 = JSBI.BigInt(Math.floor(amount));
     }
     const quoteParams: QuoteParams = {
-      amount: JSBI.BigInt(Math.floor(amount)),
-      swapMode: SwapMode.ExactIn,
+      amount: amount2,
+      swapMode: SwapMode.ExactIn,                                                                         
       sourceMint: new PublicKey(hop.sourceMint),
       destinationMint: new PublicKey(hop.destinationMint),
     };
     const amm = pools.get(hop.marketId);
     const quote = await calculateHop(amm, quoteParams);
-    const amount2 = quote.out;
+    quotes.push(quote.quotes)
+    amount2 = typeof quote.out === 'number' ? JSBI.BigInt(quote.out) : quote.out;
+    amount = typeof quote.out !== 'number' ? Number(quote.out.toString()) : quote.out;
+    if (!firstIn)
     if (!firstIn) firstIn = quote.in;
     if (JSBI.equal(amount2, JSBI.BigInt(0))) break;
   }
@@ -407,7 +417,7 @@ async function calculateRoute(route: SerializableRoute) {
   const message: AmmCalcWorkerResultMessage = {
     type: 'calculateRoute',
     payload: {
-      quote: { in: firstIn.toString(), out: amount.toString() },
+      quote: { in: firstIn.toString(), out: amount2.toString(), quotes: quotes }
     },
   };
 

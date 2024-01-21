@@ -75,7 +75,7 @@ export declare class AggregatorAccountData {
     /** Reserved for future info. */
     ebuf: any;
     static discriminator: Buffer;
-    static layout: any;
+    static layout: import("buffer-layout").Structure<unknown>;
     constructor(fields: any);
     static decode(data: any): AggregatorAccountData;
 }

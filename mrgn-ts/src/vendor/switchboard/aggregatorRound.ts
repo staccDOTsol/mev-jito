@@ -1,3 +1,5 @@
+// @ts-nocheck
+
 // import * as types from "../types/index.js"; // eslint-disable-line @typescript-eslint/no-unused-vars
 import * as borsh from "@coral-xyz/borsh";
 import { PublicKey, PublicKeyInitData } from "@solana/web3.js";
