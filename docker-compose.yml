@@ -1,0 +1,11 @@
+version: '3'
+services:
+  service1:
+    image: mev-bot
+    volumes:
+      - /home/ubuntu/arb.json:/usr/src/app/auth.json:ro
+      - /home/ubuntu/7i.json:/usr/src/app/payer.json:ro
+      - ./docker.trades.csv:/usr/src/app/trades.csv
+    env_file: .env.docker.local
+    restart: on-failure
+    network_mode: host
