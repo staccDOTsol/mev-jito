@@ -86,12 +86,12 @@ for (const pool of pools){
       addressesToFetch.push(new PublicKey(pool.id));
       addressesToFetch.push(new PublicKey(pool.marketId));
     } 
-for (let i = 0; i < addressesToFetch.length; i += 100) {
+for (let i = 0; i < addressesToFetch.length; i += 50000) {
   const batchPromises = [];
-  for (let j = 0; j < 1; j++) {
-    const batchStart = i + (j * 100);
+  for (let j = 0; j < 5; j++) {
+    const batchStart = i + (j * 10000);
     if (batchStart < addressesToFetch.length) {
-      const batch = addressesToFetch.slice(batchStart, batchStart + 100);
+      const batch = addressesToFetch.slice(batchStart, batchStart + 10000);
       batchPromises.push(connection.getMultipleAccountsInfo(batch));
       await new Promise((resolve) => setTimeout(resolve, 10));
     }
@@ -99,13 +99,13 @@ for (let i = 0; i < addressesToFetch.length; i += 100) {
   const accountsArray = await Promise.all(batchPromises);
   for (let j = 0; j < accountsArray.length; j++) {
     const accounts = accountsArray[j];
-    const batchStart = i + (j * 100);
-    const batch = addressesToFetch.slice(batchStart, batchStart + 100);
+    const batchStart = i + (j * 10000);
+    const batch = addressesToFetch.slice(batchStart, batchStart + 10000);
     for (let k = 0; k < accounts.length; k++) {
       initialAccountBuffers.set(batch[k].toBase58(), accounts[k]);
     }
   }
-  console.log(`Fetched ${Math.min(i + 500, addressesToFetch.length)} accounts / total` + addressesToFetch.length);
+  console.log(`Fetched ${Math.min(i + 50000, addressesToFetch.length)} accounts / total` + addressesToFetch.length);
 }
 class RaydiumDEX extends DEX {
   public pools: ApiPoolInfoItem[];

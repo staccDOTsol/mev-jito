@@ -11,6 +11,7 @@ import { connection } from './clients/rpc.js';
 import { logger } from './logger.js';
 import { FilteredTransaction } from './pre-simulation-filter.js';
 import { Timings } from './types.js';
+import { prioritize } from './utils.js';
 
 // drop slow sims - usually a sign of high load
 const MAX_SIMULATION_AGE_MS = 222;
@@ -136,12 +137,28 @@ async function sendSimulations(
         })
   }
 }
-
+const HIGH_WATER_MARK = 2500;
 async function* simulate(
   txnIterator: AsyncGenerator<FilteredTransaction>,
 ): AsyncGenerator<SimulationResult> {
   const eventEmitter = new EventEmitter();
-  sendSimulations(txnIterator, eventEmitter);
+  
+  const backrunnableTradesIteratorGreedyPrioritized = prioritize(
+    txnIterator,
+    (tradeA, tradeB) => {
+      if (tradeA.timings.mempoolEnd < tradeB.timings.mempoolEnd) {
+        return 0;
+      }
+      if (tradeA.timings.mempoolEnd > tradeB.timings.mempoolEnd) {
+        return 1;
+      }
+      // a must be equal to b
+      return 0;
+    },
+    HIGH_WATER_MARK,
+  );
+
+  sendSimulations(backrunnableTradesIteratorGreedyPrioritized, eventEmitter);
 
   while (true) {
     if (simulationResults.size() === 0) {

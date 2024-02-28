@@ -3,12 +3,13 @@ import {
   MessageAccountKeys,
   VersionedTransaction,
 } from '@solana/web3.js';
-import { dropBeyondHighWaterMark } from './utils.js';
+
 import { logger } from './logger.js';
+import { lookupTableProvider } from './lookup-table-provider.js';
 import { isTokenAccountOfInterest } from './markets/index.js';
 import { MempoolUpdate } from './mempool.js';
 import { Timings } from './types.js';
-import { lookupTableProvider } from './lookup-table-provider.js';
+import { dropBeyondHighWaterMark } from './utils.js';
 
 const SKIP_TX_IF_CONTAINS_ADDRESS = [
   '882DFRCi5akKFyYxT4PP2vZkoQEGvm2Nsind2nPDuGqu', // orca whirlpool mm whose rebalancing txns mess with the calc down the line and is no point in backrunning
@@ -49,8 +50,8 @@ async function* preSimulationFilter(
           addressLookupTableAccounts,
         });
         if (new Set(accountKeys.keySegments().flat()).size > 64) {
-        logger.debug('skipping tx with too many accounts: ' + accountKeys.length)
-        break
+        //logger.debug('skipping tx with too many accounts: ' + accountKeys.length)
+       // break
       }
       } catch (e) {
         logger.warn(e, 'address not in lookup table');

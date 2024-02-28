@@ -1,3 +1,4 @@
+import Agent from 'agentkeepalive';
 import EventEmitter from 'events';
 import { JitoRpcConnection } from 'jito-ts';
 import fetch, {
@@ -11,12 +12,11 @@ import { Queue } from '@datastructures-js/queue';
 import { config } from '../config.js';
 import { logger } from '../logger.js';
 
-/*
-const keepaliveHttpAgent = new HttpsAgent({
+const keepaliveHttpAgent = new Agent({
   timeout: 4000,
   freeSocketTimeout: 4000,
   maxSockets: 10000,
-});*/
+});
 
 const TRITON_URL = config.get('triton_url');
 const RPC_REQUESTS_PER_SECOND = config.get('rpc_requests_per_second');
@@ -173,14 +173,14 @@ if (RPC_REQUESTS_PER_SECOND > 0) {
     // @ts-ignore
     fetch: coalesceFetch(),
     disableRetryOnRateLimit: false,
-    //httpAgent: keepaliveHttpAgent,
+    httpAgent: keepaliveHttpAgent,
     
   });
 } else {
   tritonConnection = new JitoRpcConnection(TRITON_URL, {
     commitment: 'confirmed',
     disableRetryOnRateLimit: false,
-    //httpAgent: keepaliveHttpAgent,
+    httpAgent: keepaliveHttpAgent,
     
   });
 }

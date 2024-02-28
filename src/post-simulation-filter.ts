@@ -1,19 +1,21 @@
+import bs58 from 'bs58';
+
+import * as Token from '@solana/spl-token-3';
 import {
   PublicKey,
   SimulatedTransactionAccountInfo,
   VersionedTransaction,
 } from '@solana/web3.js';
-import { SimulationResult } from './simulation.js';
-import * as Token from '@solana/spl-token-3';
-import { Market } from './markets/types.js';
-import { getMarketForVault } from './markets/index.js';
-import { Timings } from './types.js';
-import { dropBeyondHighWaterMark } from './utils.js';
+
 import { BASE_MINTS_OF_INTEREST_B58 } from './constants.js';
 import { logger } from './logger.js';
-import bs58 from 'bs58';
+import { getMarketForVault } from './markets/index.js';
+import { Market } from './markets/types.js';
+import { SimulationResult } from './simulation.js';
+import { Timings } from './types.js';
+import { dropBeyondHighWaterMark } from './utils.js';
 
-const HIGH_WATER_MARK = 1000;
+const HIGH_WATER_MARK = 2500;
 
 enum TradeDirection {
   SOLD_BASE = 'SOLD_BASE',
@@ -161,4 +163,4 @@ async function* postSimulateFilter(
   }
 }
 
-export { postSimulateFilter, BackrunnableTrade };
+export { BackrunnableTrade, postSimulateFilter };
